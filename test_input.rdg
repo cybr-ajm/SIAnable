@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RDCMan programVersion="2.90" schemaVersion="3">
+  <file>
+    <credentialsProfiles />
+    <properties>
+      <expanded>True</expanded>
+      <name>Test Connections</name>
+    </properties>
+    <group>
+      <properties>
+        <expanded>True</expanded>
+        <name>Production</name>
+      </properties>
+      <group>
+        <properties>
+          <expanded>True</expanded>
+          <name>Web Servers</name>
+        </properties>
+        <server>
+          <properties>
+            <name>webprod01.example.com</name>
+            <displayName>Web Prod 01</displayName>
+          </properties>
+          <logonCredentials inherit="None">
+            <profileName scope="Local">Custom</profileName>
+            <userName>EXAMPLE\svcaccount</userName>
+            <password></password>
+            <domain>EXAMPLE</domain>
+          </logonCredentials>
+          <gatewaySettings inherit="FromParent" />
+          <connectionSettings inherit="FromParent" />
+        </server>
+        <server>
+          <properties>
+            <name>webprod02.example.com</name>
+            <displayName>Web Prod 02</displayName>
+          </properties>
+          <logonCredentials inherit="FromParent" />
+          <gatewaySettings inherit="FromParent" />
+          <connectionSettings inherit="FromParent" />
+        </server>
+      </group>
+      <group>
+        <properties>
+          <expanded>False</expanded>
+          <name>Database Servers</name>
+        </properties>
+        <server>
+          <properties>
+            <name>dbprod01.example.com</name>
+            <displayName>DB Prod 01</displayName>
+          </properties>
+          <logonCredentials inherit="FromParent" />
+          <gatewaySettings inherit="FromParent" />
+          <connectionSettings inherit="FromParent" />
+        </server>
+      </group>
+    </group>
+    <group>
+      <properties>
+        <expanded>True</expanded>
+        <name>Already SIA</name>
+      </properties>
+      <server>
+        <properties>
+          <name>mytenant.rdp.cyberark.cloud</name>
+          <displayName>Existing SIA Entry (SIA)</displayName>
+        </properties>
+        <logonCredentials inherit="None">
+          <profileName scope="Local">Custom</profileName>
+          <userName>secureaccess /i jsmith /s mytenant /a someserver.example.com</userName>
+          <password></password>
+          <domain></domain>
+        </logonCredentials>
+        <gatewaySettings inherit="None">
+          <hostname>mytenant.rdp.cyberark.cloud</hostname>
+          <logonMethod>0</logonMethod>
+          <bypassForLocalAddresses>False</bypassForLocalAddresses>
+          <useSameCredentialsAsRemoteComputer>False</useSameCredentialsAsRemoteComputer>
+          <credentialSource>0</credentialSource>
+          <username>secureaccess@cyberark</username>
+          <password></password>
+          <domain></domain>
+        </gatewaySettings>
+        <connectionSettings inherit="FromParent" />
+      </server>
+    </group>
+  </file>
+</RDCMan>

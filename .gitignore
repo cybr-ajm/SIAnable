@@ -1,0 +1,12 @@
+# User-specific config (contains personal paths and credentials)
+sia_config.json
+
+# Generated output
+test_output.rdg
+
+# Claude Code tooling
+.claude/
+
+# Real RDG files (may contain sensitive connection details)
+*.rdg
+!test_input.rdg
