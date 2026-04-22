@@ -225,14 +225,11 @@ function New-SiaServer {
     $gw = $Doc.CreateElement('gatewaySettings')
     $gw.SetAttribute('inherit', 'None')
 
-    $el = $Doc.CreateElement('hostname');                          $el.InnerText = $siaHostname;                        $gw.AppendChild($el) | Out-Null
-    $el = $Doc.CreateElement('logonMethod');                       $el.InnerText = '0';                                 $gw.AppendChild($el) | Out-Null
-    $el = $Doc.CreateElement('bypassForLocalAddresses');           $el.InnerText = 'False';                             $gw.AppendChild($el) | Out-Null
-    $el = $Doc.CreateElement('useSameCredentialsAsRemoteComputer');$el.InnerText = 'False';                             $gw.AppendChild($el) | Out-Null
-    $el = $Doc.CreateElement('credentialSource');                  $el.InnerText = '0';                                 $gw.AppendChild($el) | Out-Null
-    $el = $Doc.CreateElement('username');                          $el.InnerText = 'secureaccess@cyberark';             $gw.AppendChild($el) | Out-Null
-    $el = $Doc.CreateElement('password');                          $el.InnerText = ConvertTo-RdcManPassword 'secureaccess'; $gw.AppendChild($el) | Out-Null
-    $el = $Doc.CreateElement('domain');                            $el.InnerText = '';                                  $gw.AppendChild($el) | Out-Null
+    $el = $Doc.CreateElement('hostname');    $el.InnerText = $siaHostname;                            $gw.AppendChild($el) | Out-Null
+    $el = $Doc.CreateElement('logonMethod'); $el.InnerText = '0';                                         $gw.AppendChild($el) | Out-Null
+    $el = $Doc.CreateElement('username');    $el.InnerText = 'secureaccess@cyberark';                     $gw.AppendChild($el) | Out-Null
+    $el = $Doc.CreateElement('password');    $el.InnerText = ConvertTo-RdcManPassword 'secureaccess';     $gw.AppendChild($el) | Out-Null
+    $el = $Doc.CreateElement('domain');      $el.InnerText = '';                                          $gw.AppendChild($el) | Out-Null
 
     $srv.AppendChild($gw) | Out-Null
 

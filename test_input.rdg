@@ -75,9 +75,6 @@
         <gatewaySettings inherit="None">
           <hostname>mytenant.rdp.cyberark.cloud</hostname>
           <logonMethod>0</logonMethod>
-          <bypassForLocalAddresses>False</bypassForLocalAddresses>
-          <useSameCredentialsAsRemoteComputer>False</useSameCredentialsAsRemoteComputer>
-          <credentialSource>0</credentialSource>
           <username>secureaccess@cyberark</username>
           <password></password>
           <domain></domain>
