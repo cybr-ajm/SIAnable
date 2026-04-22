@@ -222,16 +222,9 @@ function New-SiaServer {
 
     $srv.AppendChild($creds) | Out-Null
 
-    # -- <gatewaySettings> --------------------------------------------------
+    # -- <gatewaySettings> — inherited from file-level definition -------------
     $gw = $Doc.CreateElement('gatewaySettings')
-    $gw.SetAttribute('inherit', 'None')
-
-    $el = $Doc.CreateElement('hostname');    $el.InnerText = $siaHostname;                            $gw.AppendChild($el) | Out-Null
-    $el = $Doc.CreateElement('logonMethod'); $el.InnerText = '0';                                         $gw.AppendChild($el) | Out-Null
-    $el = $Doc.CreateElement('username');    $el.InnerText = 'secureaccess@cyberark';                     $gw.AppendChild($el) | Out-Null
-    $el = $Doc.CreateElement('password');    $el.InnerText = ConvertTo-RdcManPassword 'secureaccess';     $gw.AppendChild($el) | Out-Null
-    $el = $Doc.CreateElement('domain');      $el.InnerText = '';                                          $gw.AppendChild($el) | Out-Null
-
+    $gw.SetAttribute('inherit', 'FromParent')
     $srv.AppendChild($gw) | Out-Null
 
     # -- Remaining settings inherited from parent ---------------------------
@@ -324,14 +317,31 @@ function New-SiaRdgFile {
     $fileEl = $doc.CreateElement('file')
     $root.AppendChild($fileEl) | Out-Null
 
-    # Empty credentials profiles block
-    $fileEl.AppendChild($doc.CreateElement('credentialsProfiles')) | Out-Null
+    # Named gateway credential profile — SIA_GW_<tenant>
+    $credProfiles = $doc.CreateElement('credentialsProfiles')
+    $cp = $doc.CreateElement('credentialsProfile')
+    $el = $doc.CreateElement('profileName'); $el.SetAttribute('scope', 'File'); $el.InnerText = "SIA_GW_$Tenant"; $cp.AppendChild($el) | Out-Null
+    $el = $doc.CreateElement('userName');    $el.InnerText = 'secureaccess@cyberark';                              $cp.AppendChild($el) | Out-Null
+    $el = $doc.CreateElement('password');    $el.InnerText = ConvertTo-RdcManPassword 'secureaccess';              $cp.AppendChild($el) | Out-Null
+    $el = $doc.CreateElement('domain');      $el.InnerText = '';                                                   $cp.AppendChild($el) | Out-Null
+    $credProfiles.AppendChild($cp) | Out-Null
+    $fileEl.AppendChild($credProfiles) | Out-Null
 
     # File-level properties (the name shown in the RDCMan tree)
     $fileProps = $doc.CreateElement('properties')
     $el = $doc.CreateElement('name');     $el.InnerText = $GroupName; $fileProps.AppendChild($el) | Out-Null
     $el = $doc.CreateElement('expanded'); $el.InnerText = 'True';     $fileProps.AppendChild($el) | Out-Null
     $fileEl.AppendChild($fileProps) | Out-Null
+
+    # File-level gateway settings — all groups and servers inherit this
+    $fileGw = $doc.CreateElement('gatewaySettings')
+    $fileGw.SetAttribute('inherit', 'None')
+    $el = $doc.CreateElement('hostname');    $el.InnerText = "$Tenant.rdp.cyberark.cloud";        $fileGw.AppendChild($el) | Out-Null
+    $el = $doc.CreateElement('logonMethod'); $el.InnerText = '0';                                 $fileGw.AppendChild($el) | Out-Null
+    $el = $doc.CreateElement('username');    $el.InnerText = 'secureaccess@cyberark';             $fileGw.AppendChild($el) | Out-Null
+    $el = $doc.CreateElement('password');    $el.InnerText = ConvertTo-RdcManPassword 'secureaccess'; $fileGw.AppendChild($el) | Out-Null
+    $el = $doc.CreateElement('domain');      $el.InnerText = '';                                  $fileGw.AppendChild($el) | Out-Null
+    $fileEl.AppendChild($fileGw) | Out-Null
 
     # Mirror all top-level groups from source
     foreach ($srcGroup in @($srcFile.SelectNodes('group'))) {
