@@ -119,7 +119,7 @@ function Invoke-ConfigPrompt {
     Write-Host "Source RDG file${srcHint}" -ForegroundColor White
     $srcVal = Read-Host '  Type path, or press Enter to browse'
     if ($srcVal) {
-        $Config.SourceRdgPath = $srcVal
+        $Config.SourceRdgPath = $srcVal.Trim('"')
     } else {
         $initDir = if ($Config.SourceRdgPath -and (Test-Path (Split-Path $Config.SourceRdgPath -Parent))) {
             Split-Path $Config.SourceRdgPath -Parent
@@ -136,6 +136,7 @@ function Invoke-ConfigPrompt {
     Write-Host "Target RDG output file${tgtHint}" -ForegroundColor White
     $tgtVal = Read-Host '  Type path, or press Enter to browse'
     if ($tgtVal) {
+        $tgtVal = $tgtVal.Trim('"')
         if (-not $tgtVal.EndsWith('.rdg')) { $tgtVal += '.rdg' }
         $Config.TargetRdgPath = $tgtVal
     } else {
