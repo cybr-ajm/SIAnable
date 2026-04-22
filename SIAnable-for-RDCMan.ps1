@@ -211,7 +211,7 @@ function New-SiaServer {
     $creds = $Doc.CreateElement('logonCredentials')
     $creds.SetAttribute('inherit', 'None')
 
-    $el = $Doc.CreateElement('profileName'); $el.SetAttribute('scope', 'Local'); $el.InnerText = 'Custom'
+    $el = $Doc.CreateElement('profileName'); $el.SetAttribute('scope', 'Local'); $el.InnerText = "SIA_$origHostname"
     $creds.AppendChild($el) | Out-Null
     $el = $Doc.CreateElement('userName');  $el.InnerText = $username
     $creds.AppendChild($el) | Out-Null
