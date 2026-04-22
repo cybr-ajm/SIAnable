@@ -320,6 +320,7 @@ function New-SiaRdgFile {
     # Named gateway credential profile — SIA_GW_<tenant>
     $credProfiles = $doc.CreateElement('credentialsProfiles')
     $cp = $doc.CreateElement('credentialsProfile')
+    $cp.SetAttribute('inherit', 'None')
     $el = $doc.CreateElement('profileName'); $el.SetAttribute('scope', 'File'); $el.InnerText = "SIA_GW_$Tenant"; $cp.AppendChild($el) | Out-Null
     $el = $doc.CreateElement('userName');    $el.InnerText = 'secureaccess@cyberark';                              $cp.AppendChild($el) | Out-Null
     $el = $doc.CreateElement('password');    $el.InnerText = ConvertTo-RdcManPassword 'secureaccess';              $cp.AppendChild($el) | Out-Null
