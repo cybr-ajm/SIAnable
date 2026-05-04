@@ -63,6 +63,7 @@ function Get-Config {
     $myDocs = [Environment]::GetFolderPath('MyDocuments')
     $defaults = [ordered]@{
         TenantFriendlyName = ''
+        IdentityTenantId   = ''
         IspssUsername      = ''
         EnableMfaCache     = $false
         TargetGroupName    = 'CyberArk SIA Connections'
@@ -72,7 +73,7 @@ function Get-Config {
 
     if (Test-Path $ConfigFile) {
         $saved = Get-Content $ConfigFile -Raw -Encoding UTF8 | ConvertFrom-Json
-        foreach ($key in $defaults.Keys) {
+        foreach ($key in @($defaults.Keys)) {
             if ($null -ne $saved.$key -and $saved.$key -ne '') {
                 $defaults[$key] = $saved.$key
             }
@@ -106,6 +107,7 @@ function Invoke-ConfigPrompt {
     Write-Host ''
 
     $Config.TenantFriendlyName = Read-Value 'CyberArk tenant friendly name'   $Config.TenantFriendlyName
+    $Config.IdentityTenantId   = Read-Value 'CyberArk Identity tenant ID'      $Config.IdentityTenantId
     $Config.IspssUsername      = Read-Value 'ISPSS username'                   $Config.IspssUsername
     $Config.TargetGroupName    = Read-Value 'Target group name in output file' $Config.TargetGroupName
 
@@ -117,10 +119,10 @@ function Invoke-ConfigPrompt {
     Write-Host ''
     $srcHint = if ($Config.SourceRdgPath) { " [$($Config.SourceRdgPath)]" } else { '' }
     Write-Host "Source RDG file${srcHint}" -ForegroundColor White
-    $srcVal = Read-Host '  Type path, or press Enter to browse'
-    if ($srcVal) {
-        $Config.SourceRdgPath = $srcVal.Trim('"')
-    } else {
+    $srcVal = Read-Host '  Type a path, B to browse, or Enter to keep'
+    if (-not $srcVal -and $Config.SourceRdgPath) {
+        # keep current
+    } elseif (-not $srcVal -or $srcVal -match '^[Bb]$') {
         $initDir = if ($Config.SourceRdgPath -and (Test-Path (Split-Path $Config.SourceRdgPath -Parent))) {
             Split-Path $Config.SourceRdgPath -Parent
         } else {
@@ -128,18 +130,18 @@ function Invoke-ConfigPrompt {
         }
         $path = Get-RdgFileGui 'Select source RDG file' $initDir
         if ($path) { $Config.SourceRdgPath = $path }
+    } else {
+        $Config.SourceRdgPath = $srcVal.Trim('"')
     }
 
     # Target RDG file
     Write-Host ''
     $tgtHint = if ($Config.TargetRdgPath) { " [$($Config.TargetRdgPath)]" } else { '' }
     Write-Host "Target RDG output file${tgtHint}" -ForegroundColor White
-    $tgtVal = Read-Host '  Type path, or press Enter to browse'
-    if ($tgtVal) {
-        $tgtVal = $tgtVal.Trim('"')
-        if (-not $tgtVal.EndsWith('.rdg')) { $tgtVal += '.rdg' }
-        $Config.TargetRdgPath = $tgtVal
-    } else {
+    $tgtVal = Read-Host '  Type a path, B to browse, or Enter to keep'
+    if (-not $tgtVal -and $Config.TargetRdgPath) {
+        # keep current
+    } elseif (-not $tgtVal -or $tgtVal -match '^[Bb]$') {
         $initDir = if ($Config.TargetRdgPath -and (Test-Path (Split-Path $Config.TargetRdgPath -Parent))) {
             Split-Path $Config.TargetRdgPath -Parent
         } else {
@@ -148,6 +150,10 @@ function Invoke-ConfigPrompt {
         $defName = if ($Config.TargetRdgPath) { Split-Path $Config.TargetRdgPath -Leaf } else { 'SIA_Connections.rdg' }
         $path = Save-RdgFileGui 'Save SIA connections file as' $initDir $defName
         if ($path) { $Config.TargetRdgPath = $path }
+    } else {
+        $tgtVal = $tgtVal.Trim('"')
+        if (-not $tgtVal.EndsWith('.rdg')) { $tgtVal += '.rdg' }
+        $Config.TargetRdgPath = $tgtVal
     }
 
     return $Config
@@ -161,6 +167,7 @@ function Test-Config {
     param($Config)
     $errs = @()
     if (-not $Config.TenantFriendlyName) { $errs += 'Tenant friendly name is required.' }
+    if (-not $Config.IdentityTenantId)   { $errs += 'CyberArk Identity tenant ID is required.' }
     if (-not $Config.IspssUsername)      { $errs += 'ISPSS username is required.' }
     if (-not $Config.TargetGroupName)    { $errs += 'Target group name is required.' }
     if (-not $Config.SourceRdgPath)      { $errs += 'Source RDG file path is required.' }
