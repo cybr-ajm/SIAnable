@@ -4,7 +4,7 @@
     Authenticates to CyberArk SIA and refreshes MFA-caching RDP passwords in an .rdg file.
 .DESCRIPTION
     Reads tenant/user settings from sia_config.json, authenticates via CyberArk Identity,
-    retrieves an RDP MFA caching token from the DPA API, then updates the password field
+    retrieves an RDP MFA caching token from the SIA API, then updates the password field
     of every connection in the selected .rdg file whose username contains the /m flag.
     Passwords are DPAPI-encrypted for RDCMan compatibility.
 #>
@@ -106,7 +106,7 @@ function Trace-ApiCall {
 
 # ---------------------------------------------------------------------------
 # CyberArk Identity authentication
-# Returns the platform token (bearer token for DPA API calls)
+# Returns the platform token (bearer token for SIA API calls)
 # ---------------------------------------------------------------------------
 
 function Invoke-CyberArkIdentityAuth {
@@ -301,7 +301,7 @@ function Invoke-CyberArkIdentityAuth {
 }
 
 # ---------------------------------------------------------------------------
-# Retrieve the DPA RDP MFA caching token
+# Retrieve the SIA RDP MFA caching token
 # ---------------------------------------------------------------------------
 
 function Get-DpaMfaCacheToken {
@@ -318,13 +318,13 @@ function Get-DpaMfaCacheToken {
         $resp = Invoke-RestMethod -Uri $uri -Method Post -Headers $headers -Body $body -ErrorAction Stop
         Trace-ApiCall -Uri $uri -Body $body -Response $resp
     } catch {
-        throw "DPA token request failed: $_"
+        throw "SIA token request failed: $_"
     }
 
     $token = $resp.token.key
 
     if (-not $token) {
-        throw "DPA response did not contain a token.key value.`nRaw: $($resp | ConvertTo-Json -Depth 5)"
+        throw "SIA response did not contain a token.key value.`nRaw: $($resp | ConvertTo-Json -Depth 5)"
     }
 
     return $token
@@ -447,7 +447,7 @@ function Invoke-SIAuth {
     }
     Write-Host 'Authentication successful.' -ForegroundColor Green
 
-    # --- Retrieve DPA MFA token ---
+    # --- Retrieve SIA MFA token ---
     try {
         $mfaToken = Get-DpaMfaCacheToken -Tenant $config.TenantFriendlyName -BearerToken $bearerToken
     } catch {

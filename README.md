@@ -7,13 +7,13 @@ A pair of PowerShell scripts that make [Remote Desktop Connection Manager (RDCMa
 | Script | Purpose |
 |---|---|
 | `SIAnable-for-RDCMan.ps1` | Converts an existing `.rdg` file into a SIA-enabled duplicate, rewriting all server connections to route through the CyberArk SIA gateway |
-| `SIAuth-for-RDCMan.ps1` | Authenticates to CyberArk Identity, retrieves an MFA caching token from the DPA API, and writes it into every `/m` connection in a `.rdg` file |
+| `SIAuth-for-RDCMan.ps1` | Authenticates to CyberArk Identity, retrieves an MFA caching token from the SIA API, and writes it into every `/m` connection in a `.rdg` file |
 
 ## Requirements
 
 - Windows PowerShell 5.1 or later
 - [Remote Desktop Connection Manager](https://learn.microsoft.com/en-us/sysinternals/downloads/rdcman)
-- A CyberArk SIA tenant with DPA enabled
+- A CyberArk SIA tenant
 - A CyberArk Identity account with MFA enrolled
 
 ## Configuration
@@ -58,7 +58,7 @@ The `/m` flag is included when `EnableMfaCache` is `true`. When present, the RDP
 
 ## SIAuth-for-RDCMan.ps1
 
-Authenticates to CyberArk Identity, obtains a DPA RDP token, and writes it into the `<password>` field of every connection whose username contains `/m`. The password is DPAPI-encrypted so RDCMan can read it.
+Authenticates to CyberArk Identity, obtains an SIA RDP token, and writes it into the `<password>` field of every connection whose username contains `/m`. The password is DPAPI-encrypted so RDCMan can read it.
 
 Run this periodically to refresh the token before it expires (tokens are typically valid for one hour).
 
@@ -84,7 +84,7 @@ Add `-DebugMode` to print every API request and response:
    - **Phone call**
    - **FIDO2 / YubiKey**
    - **RADIUS** (CyberArk MFA, Okta MFA)
-4. On success, calls `POST /api/adb/sso/acquire` on the DPA userportal to retrieve the RDP token
+4. On success, calls `POST /api/adb/sso/acquire` on the SIA userportal to retrieve the RDP token
 5. DPAPI-encrypts the token and writes it to every matching credential entry in the selected `.rdg` file
 
 ### Supported credential locations
