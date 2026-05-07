@@ -320,16 +320,29 @@ function Get-SiaMfaCacheToken {
 # Returns the count of connections updated
 # ---------------------------------------------------------------------------
 
-function Update-RtszMfaPasswords {
-    param([string]$RtszPath, [string]$MfaToken)
+function ConvertTo-PlainText {
+    param([SecureString]$SecureString)
+    if (-not $SecureString -or $SecureString.Length -eq 0) { return $null }
+    [Runtime.InteropServices.Marshal]::PtrToStringBSTR(
+        [Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecureString))
+}
 
+function Update-RtszMfaPasswords {
+    param([string]$RtszPath, [string]$MfaToken, [SecureString]$DocumentPassword)
+
+    $plain  = ConvertTo-PlainText $DocumentPassword
     $store  = New-RoyalStore -UserName "$env:USERDOMAIN\$env:USERNAME"
-    $doc    = Open-RoyalDocument -FileName $RtszPath -Store $store
+    $doc    = if ($plain) {
+        Open-RoyalDocument -FileName $RtszPath -Store $store -Password $plain
+    } else {
+        Open-RoyalDocument -FileName $RtszPath -Store $store
+    }
     $updated = 0
 
     try {
         foreach ($conn in @(Get-RoyalObject -Document $doc -Type RoyalRDSConnection)) {
-            if ($conn.CredentialUsername -notmatch '/m\b') { continue }
+            # EffectiveUsername resolves the final username regardless of credential mode
+            if ($conn.EffectiveUsername -notmatch '/m\b') { continue }
             Set-RoyalObjectValue -Object $conn -Property 'CredentialPassword' -Value $MfaToken
             $updated++
         }
@@ -385,6 +398,11 @@ function Invoke-SIAuthRoyalTS {
     if (-not $rtszPath) { Write-Host 'No file selected. Cancelled.' -ForegroundColor Yellow; exit 0 }
     if (-not (Test-Path $rtszPath)) { Write-Host "File not found: $rtszPath" -ForegroundColor Red; exit 1 }
 
+    # --- Document password (never saved to config) ---
+    Write-Host ''
+    Write-Host 'Document password (press Enter if not encrypted):' -ForegroundColor White
+    $docPassword = Read-Host '  Password' -AsSecureString
+
     # --- Authenticate ---
     try {
         $bearerToken = Invoke-CyberArkIdentityAuth -IdentityTenantId $config.IdentityTenantId `
@@ -404,7 +422,7 @@ function Invoke-SIAuthRoyalTS {
 
     # --- Update document ---
     try {
-        $count = Update-RtszMfaPasswords -RtszPath $rtszPath -MfaToken $mfaToken
+        $count = Update-RtszMfaPasswords -RtszPath $rtszPath -MfaToken $mfaToken -DocumentPassword $docPassword
     } catch {
         Write-Host "Error updating document: $_" -ForegroundColor Red; exit 1
     }

@@ -112,7 +112,7 @@ function Invoke-ConfigPrompt {
     $Config.TargetGroupName    = Read-Value 'Target group name in output file' $Config.TargetGroupName
 
     $mfaHint = if ($Config.EnableMfaCache) { 'Y' } else { 'N' }
-    $mfaVal  = Read-Host "Enable MFA caching token (/m flag)? (Y/N) [$mfaHint]"
+    $mfaVal  = Read-Host "Enable MFA caching token ( flag)? (Y/N) [$mfaHint]"
     if ($mfaVal) { $Config.EnableMfaCache = ($mfaVal -match '^[Yy]') }
 
     # Source RDG file
@@ -229,9 +229,14 @@ function New-SiaServer {
 
     $srv.AppendChild($creds) | Out-Null
 
-    # -- <gatewaySettings> — inherited from file-level definition -------------
+    # -- <gatewaySettings> — explicitly set per server, not inherited ----------
     $gw = $Doc.CreateElement('gatewaySettings')
-    $gw.SetAttribute('inherit', 'FromParent')
+    $gw.SetAttribute('inherit', 'None')
+    $el = $Doc.CreateElement('hostname');    $el.InnerText = $siaHostname;                           $gw.AppendChild($el) | Out-Null
+    $el = $Doc.CreateElement('logonMethod'); $el.InnerText = '0';                                    $gw.AppendChild($el) | Out-Null
+    $el = $Doc.CreateElement('username');    $el.InnerText = 'secureaccess@cyberark';                $gw.AppendChild($el) | Out-Null
+    $el = $Doc.CreateElement('password');    $el.InnerText = ConvertTo-RdcManPassword 'secureaccess'; $gw.AppendChild($el) | Out-Null
+    $el = $Doc.CreateElement('domain');      $el.InnerText = '';                                     $gw.AppendChild($el) | Out-Null
     $srv.AppendChild($gw) | Out-Null
 
     # -- Remaining settings inherited from parent ---------------------------

@@ -177,11 +177,23 @@ function Test-Config {
 # Count RDP connections in a document (for the summary line)
 # ---------------------------------------------------------------------------
 
+function ConvertTo-PlainText {
+    param([SecureString]$SecureString)
+    if (-not $SecureString -or $SecureString.Length -eq 0) { return $null }
+    [Runtime.InteropServices.Marshal]::PtrToStringBSTR(
+        [Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecureString))
+}
+
 function Get-ConnectionCount {
-    param([string]$Path)
+    param([string]$Path, [SecureString]$Password)
     try {
         $store = New-RoyalStore -UserName "$env:USERDOMAIN\$env:USERNAME"
-        $doc   = Open-RoyalDocument -FileName $Path -Store $store
+        $plain = ConvertTo-PlainText $Password
+        $doc   = if ($plain) {
+            Open-RoyalDocument -FileName $Path -Store $store -Password $plain
+        } else {
+            Open-RoyalDocument -FileName $Path -Store $store
+        }
         $count = @(Get-RoyalObject -Document $doc -Type RoyalRDSConnection).Count
         Close-RoyalDocument -Document $doc | Out-Null
         return $count
@@ -264,23 +276,34 @@ function New-SiaRtszFile {
         [string]$TargetPath,
         [string]$Tenant,
         [string]$IspssUser,
-        [bool]$MfaCache
+        [bool]$MfaCache,
+        [SecureString]$SourcePassword,
+        [SecureString]$OutputPassword
     )
 
-    $docName = [System.IO.Path]::GetFileNameWithoutExtension($TargetPath)
-    $store   = New-RoyalStore -UserName "$env:USERDOMAIN\$env:USERNAME"
-    $srcDoc  = $null
-    $outDoc  = $null
+    $docName  = [System.IO.Path]::GetFileNameWithoutExtension($TargetPath)
+    $store    = New-RoyalStore -UserName "$env:USERDOMAIN\$env:USERNAME"
+    $srcDoc   = $null
+    $outDoc   = $null
+    $srcPlain = ConvertTo-PlainText $SourcePassword
+    $outPlain = ConvertTo-PlainText $OutputPassword
 
     try {
-        $srcDoc = Open-RoyalDocument -FileName $SourcePath -Store $store
-        $outDoc = New-RoyalDocument  -Name $docName -FileName $TargetPath -Store $store
+        $srcDoc = if ($srcPlain) {
+            Open-RoyalDocument -FileName $SourcePath -Store $store -Password $srcPlain
+        } else {
+            Open-RoyalDocument -FileName $SourcePath -Store $store
+        }
+        $outDoc = New-RoyalDocument -Name $docName -FileName $TargetPath -Store $store
+        if ($outPlain) {
+            Set-RoyalDocumentPassword -Document $outDoc -Password $outPlain
+        }
 
         # Shared gateway credential — one per document, referenced by all connections.
         # The gateway always authenticates as secureaccess@cyberark with password secureaccess.
         $gwCredName = "SIA_GW_$Tenant"
         $gwCred = New-RoyalObject -Folder $outDoc -Type RoyalCredential -Name $gwCredName
-        Set-RoyalObjectValue -Object $gwCred -Property 'Username' -Value 'secureaccess@cyberark'
+        Set-RoyalObjectValue -Object $gwCred -Property 'UserName' -Value 'secureaccess@cyberark'
         Set-RoyalObjectValue -Object $gwCred -Property 'Password' -Value 'secureaccess'
 
         # Mirror top-level folders and any root-level connections from the source
@@ -325,7 +348,16 @@ function Invoke-SIAnableRoyalTS {
 
     Save-Config $config
 
-    $connCount = Get-ConnectionCount $config.SourceRtszPath
+    # Passwords are never saved to config
+    Write-Host ''
+    Write-Host 'Source document password (press Enter if not encrypted):' -ForegroundColor White
+    $srcPassword = Read-Host '  Password' -AsSecureString
+
+    Write-Host ''
+    Write-Host 'Encrypt output document? Enter a password or press Enter to skip:' -ForegroundColor White
+    $outPassword = Read-Host '  Password' -AsSecureString
+
+    $connCount = Get-ConnectionCount -Path $config.SourceRtszPath -Password $srcPassword
 
     Write-Host ''
     Write-Host '--- Summary ---' -ForegroundColor Cyan
@@ -347,11 +379,13 @@ function Invoke-SIAnableRoyalTS {
 
     try {
         New-SiaRtszFile `
-            -SourcePath $config.SourceRtszPath `
-            -TargetPath $config.TargetRtszPath `
-            -Tenant     $config.TenantFriendlyName `
-            -IspssUser  $config.IspssUsername `
-            -MfaCache   $config.EnableMfaCache
+            -SourcePath      $config.SourceRtszPath `
+            -TargetPath      $config.TargetRtszPath `
+            -Tenant          $config.TenantFriendlyName `
+            -IspssUser       $config.IspssUsername `
+            -MfaCache        $config.EnableMfaCache `
+            -SourcePassword  $srcPassword `
+            -OutputPassword  $outPassword
 
         Write-Host "Done. Output written to: $($config.TargetRtszPath)" -ForegroundColor Green
     } catch {
