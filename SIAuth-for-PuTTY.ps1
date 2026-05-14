@@ -229,16 +229,29 @@ function Get-SiaSshKey {
 
     if ($Script:DebugMode) {
         Write-Host "  [DBG] -> GET $uri" -ForegroundColor DarkCyan
+        Write-Host "         Headers:" -ForegroundColor DarkCyan
+        $headers.GetEnumerator() | ForEach-Object {
+            $val = if ($_.Key -eq 'Authorization') { 'Bearer [...token...]' } else { $_.Value }
+            Write-Host "           $($_.Key): $val" -ForegroundColor DarkCyan
+        }
     }
 
     try {
         $resp = Invoke-WebRequest -Uri $uri -Method Get -Headers $headers -ErrorAction Stop
     } catch {
+        if ($Script:DebugMode -and $_.Exception.Response) {
+            $errBody = $_.Exception.Response.GetResponseStream()
+            $reader  = New-Object System.IO.StreamReader($errBody)
+            Write-Host "  [DBG] Error response body: $($reader.ReadToEnd())" -ForegroundColor Red
+        }
         throw "SSH key request failed: $_"
     }
 
     if ($Script:DebugMode) {
-        Write-Host "         Resp: [key content, $($resp.Content.Length) byte(s)]" -ForegroundColor DarkYellow
+        Write-Host "         Status : $($resp.StatusCode) $($resp.StatusDescription)" -ForegroundColor DarkYellow
+        Write-Host "         Content-Type : $($resp.Headers['Content-Type'])" -ForegroundColor DarkYellow
+        Write-Host "         Body ($($resp.Content.Length) byte(s)):" -ForegroundColor DarkYellow
+        Write-Host $resp.Content -ForegroundColor DarkYellow
     }
 
     if (-not $resp.Content) { throw 'SIA returned an empty SSH key response.' }
