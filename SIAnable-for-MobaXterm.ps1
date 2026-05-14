@@ -5,7 +5,7 @@
     prefixed with _SIA, within a dedicated SIA bookmark folder.
 .DESCRIPTION
     Reads MobaXterm.ini from the user's AppData folder, finds all SSH sessions
-    (protocol type #109#), and writes _SIA-prefixed copies into a new bookmark
+    (protocol type #109#), and writes SIA-prefixed copies into a new bookmark
     group with the hostname and username rewritten for the CyberArk SIA SSH gateway.
     The original file is backed up as MobaXterm.ini.bak before any changes are made.
 #>
@@ -15,7 +15,6 @@ param()
 
 $ConfigFile  = Join-Path $PSScriptRoot 'sia_config.json'
 $MobaIniPath = Join-Path $env:APPDATA 'MobaXterm\MobaXterm.ini'
-$SiaSubRep   = 'CyberArk SIA Connections'
 
 # ---------------------------------------------------------------------------
 # Config persistence (extends shared sia_config.json)
@@ -134,7 +133,8 @@ function Write-MobaIni {
 
 # ---------------------------------------------------------------------------
 # Session discovery — collect all SSH (#109#) sessions across bookmark sections,
-# skipping entries already prefixed with _SIA
+# skipping entries already prefixed with SIA_. Each session records its source
+# folder name (SubRep) so output can be grouped into matching SIA_ folders.
 # ---------------------------------------------------------------------------
 
 function Get-MobaSshSessions {
@@ -142,13 +142,16 @@ function Get-MobaSshSessions {
 
     $sessions = @()
     foreach ($s in ($Sections | Where-Object { $_.Name -like 'Bookmarks*' })) {
+        $subRepLine = $s.Lines | Where-Object { $_ -match '^SubRep=' } | Select-Object -First 1
+        $subRep     = if ($subRepLine) { $subRepLine -replace '^SubRep=', '' } else { '' }
+
         foreach ($line in $s.Lines) {
             # Session lines: <name>=<data containing #109#>
             if ($line -notmatch '^([^=]+)=(.*#109#.*)$') { continue }
             $name = $matches[1]
             $data = $matches[2]
 
-            if ($name -match '^_SIA') { continue }   # skip already-converted
+            if ($name -match '^SIA_') { continue }   # skip already-converted
 
             # Field layout (%-delimited after the #109#X prefix):
             # [0] = #109#<subtype>   [1] = hostname   [2] = port   [3] = username ...
@@ -160,6 +163,7 @@ function Get-MobaSshSessions {
                 Name     = $name
                 Data     = $data
                 OrigHost = $origHost
+                SubRep   = $subRep
             }
         }
     }
@@ -168,16 +172,17 @@ function Get-MobaSshSessions {
 }
 
 # ---------------------------------------------------------------------------
-# Rewrite hostname (field 1), username (field 3), and optionally the private
-# key path (field 14) for the SIA gateway.
+# Build a SIA session string for the given source session.
 #
-# MobaXterm saves sessions in two formats:
-#   Simple  (~15 fields) — default settings only; field 14 is trailing whitespace
-#   Full   (30+ fields)  — all settings explicit; field 14 is the private key path
+# Always constructs from a known-good full-format template derived from a
+# working MobaXterm SIA session, rather than modifying source fields in-place.
+# In-place editing is unreliable: source sessions (especially those imported
+# from PuTTY) carry non-standard field values that cause MobaXterm to mis-parse
+# the username even when the username field itself looks correct.
 #
-# Field 14 is only updated when the session is already in full format (>15 fields),
-# since inserting a key path into a simple-format session corrupts the structure.
-# MobaXterm uses _ProfileDir_ as a placeholder for the Windows user profile root.
+# Only the original port is carried over; all other fields use MobaXterm
+# defaults. '#' is encoded as __DIEZE__ per MobaXterm's INI convention.
+# _ProfileDir_ is MobaXterm's placeholder for the Windows user profile root.
 # ---------------------------------------------------------------------------
 
 function Convert-ToSiaSessionData {
@@ -189,18 +194,12 @@ function Convert-ToSiaSessionData {
         [bool]$SetKeyFile
     )
 
-    $parts    = $Data -split '%'
-    $parts[1] = "$Tenant.ssh.cyberark.cloud"
-    $parts[3] = "$IspssUser#$Tenant@$OrigHost"
+    $port     = ($Data -split '%')[2]
+    $gw       = "$Tenant.ssh.cyberark.cloud"
+    $user     = "${IspssUser}__DIEZE__${Tenant}@${OrigHost}"
+    $keyField = if ($SetKeyFile) { "_ProfileDir_\.ssh\cyberark_sia_$Tenant.key" } else { '' }
 
-    if ($SetKeyFile -and $parts.Length -gt 15) {
-        # Full-format session — field 14 is the private key path.
-        # Use _ProfileDir_ (MobaXterm's placeholder for USERPROFILE) and
-        # no file extension since MobaXterm expects OpenSSH format.
-        $parts[14] = "_ProfileDir_\.ssh\cyberark_sia_$Tenant"
-    }
-
-    return ($parts -join '%')
+    return " #109#0%$gw%$port%$user%%-1%-1%%%%%0%0%0%$keyField%%-1%0%0%0%%1080%%0%0%1%%0%%%%0%-1%-1%0#$OrigHost%10%-1%0%-1%15%236,236,236%30,30,30%180,180,192%-1%0%0%%xterm%-1%0%_Std_Colors_0_%80%24%0%1%-1%<none>%%0%0%-1%0%#0#0 #-1"
 }
 
 # ===========================================================================
@@ -242,9 +241,14 @@ function Invoke-SIAnableMobaXterm {
     Write-Host "  ISPSS user     : $($config.IspssUsername)"
     Write-Host "  MFA cache      : $($config.EnableMfaCache)"
     Write-Host ''
+    $groups = $sshSessions | Group-Object SubRep
     Write-Host "  $($sshSessions.Count) SSH session(s) to convert:" -ForegroundColor White
-    foreach ($s in $sshSessions) {
-        Write-Host "    $($s.Name)  →  _SIA$($s.Name)"
+    foreach ($group in $groups) {
+        $folderName = if ($group.Name) { "SIA_$($group.Name)" } else { 'SIA_Sessions' }
+        Write-Host "  [$folderName]" -ForegroundColor White
+        foreach ($s in $group.Group) {
+            Write-Host "    $($s.Name)  →  SIA_$($s.Name)"
+        }
     }
     Write-Host ''
 
@@ -254,15 +258,14 @@ function Invoke-SIAnableMobaXterm {
         exit 0
     }
 
-    # Remove any existing SIA bookmark section so re-runs don't accumulate duplicates
-    $escaped = [regex]::Escape($SiaSubRep)
+    # Remove any existing SIA_ bookmark sections so re-runs don't accumulate duplicates
     $sections = [System.Collections.Generic.List[pscustomobject]]@(
         $sections | Where-Object {
-            -not ($_.Lines | Where-Object { $_ -match "^SubRep=$escaped$" })
+            -not ($_.Lines | Where-Object { $_ -match '^SubRep=SIA_' })
         }
     )
 
-    # Find the next available [Bookmarks_N] number
+    # Find the starting [Bookmarks_N] number for the new sections
     $existingNums = @($sections |
         Where-Object { $_.Name -match '^Bookmarks_(\d+)$' } |
         ForEach-Object { [int]($_.Name -replace 'Bookmarks_', '') })
@@ -270,29 +273,30 @@ function Invoke-SIAnableMobaXterm {
         ($existingNums | Measure-Object -Maximum).Maximum + 1
     } else { 1 }
 
-    # Build the SIA bookmark section
-    $siaLines = [System.Collections.Generic.List[string]]::new()
-    $siaLines.Add("SubRep=$SiaSubRep")
-    $siaLines.Add('ImgNum=42')
+    # Build one SIA_ bookmark section per source folder
+    foreach ($group in $groups) {
+        $folderName = if ($group.Name) { "SIA_$($group.Name)" } else { 'SIA_Sessions' }
+        $siaLines   = [System.Collections.Generic.List[string]]::new()
+        $siaLines.Add("SubRep=$folderName")
+        $siaLines.Add('ImgNum=42')
 
-    $simpleFormatCount = 0
-    foreach ($session in $sshSessions) {
-        $siaName    = "_SIA$($session.Name)"
-        $isFullFmt  = ($session.Data -split '%').Length -gt 15
-        if ($config.EnableMfaCache -and -not $isFullFmt) { $simpleFormatCount++ }
-        $siaData = Convert-ToSiaSessionData `
-            -Data       $session.Data `
-            -Tenant     $config.TenantFriendlyName `
-            -IspssUser  $config.IspssUsername `
-            -OrigHost   $session.OrigHost `
-            -SetKeyFile ($config.EnableMfaCache -and $isFullFmt)
-        $siaLines.Add("$siaName=$siaData")
+        foreach ($session in $group.Group) {
+            $siaName = "SIA_$($session.Name)"
+            $siaData = Convert-ToSiaSessionData `
+                -Data       $session.Data `
+                -Tenant     $config.TenantFriendlyName `
+                -IspssUser  $config.IspssUsername `
+                -OrigHost   $session.OrigHost `
+                -SetKeyFile $config.EnableMfaCache
+            $siaLines.Add("$siaName=$siaData")
+        }
+
+        $sections.Add([pscustomobject]@{
+            Name  = "Bookmarks_$nextNum"
+            Lines = $siaLines
+        })
+        $nextNum++
     }
-
-    $sections.Add([pscustomobject]@{
-        Name  = "Bookmarks_$nextNum"
-        Lines = $siaLines
-    })
 
     # Back up original then write
     Copy-Item $MobaIniPath "$MobaIniPath.bak" -Force
@@ -303,12 +307,6 @@ function Invoke-SIAnableMobaXterm {
     Write-Host "Original backed up to: $MobaIniPath.bak" -ForegroundColor DarkGray
     if ($config.EnableMfaCache) {
         Write-Host 'Run SIAuth-for-SSH.ps1 to retrieve and store the SSH key.' -ForegroundColor DarkGray
-        if ($simpleFormatCount -gt 0) {
-            Write-Host ''
-            Write-Host "Note: $simpleFormatCount session(s) use MobaXterm's compact format and could not have" -ForegroundColor Yellow
-            Write-Host '      the key path configured automatically. Open each _SIA session in MobaXterm,' -ForegroundColor Yellow
-            Write-Host '      set the private key file manually, and save — then re-run this script.' -ForegroundColor Yellow
-        }
     }
 }
 

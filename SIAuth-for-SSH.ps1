@@ -25,8 +25,8 @@ $Script:DebugMode = $DebugMode.IsPresent
 
 function Get-SshKeyPath {
     param([string]$Tenant, [string]$Format)
-    # When both formats are requested, PuTTY's PublicKeyFile entry uses the .ppk path
-    $ext = if ($Format -in @('ppk', 'both')) { '.ppk' } else { '' }
+    # 'both' returns the .ppk path — PuTTY's PublicKeyFile entry points there
+    $ext = if ($Format -in @('ppk', 'both')) { '.ppk' } else { '.key' }
     Join-Path $env:USERPROFILE ".ssh\cyberark_sia_$Tenant$ext"
 }
 
