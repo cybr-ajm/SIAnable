@@ -17,7 +17,8 @@ $PuttySessions = 'HKCU:\SOFTWARE\SimonTatham\PuTTY\Sessions'
 
 function Get-SshKeyPath {
     param([string]$Tenant, [string]$Format)
-    $ext = if ($Format -eq 'ppk') { '.ppk' } else { '' }
+    # When both formats are requested, PuTTY's PublicKeyFile entry uses the .ppk path
+    $ext = if ($Format -in @('ppk', 'both')) { '.ppk' } else { '' }
     Join-Path $env:USERPROFILE ".ssh\cyberark_sia_$Tenant$ext"
 }
 
@@ -83,8 +84,8 @@ function Invoke-ConfigPrompt {
 
     if ($Config.EnableMfaCache) {
         do {
-            $fmtVal = Read-Value 'SSH key format (ppk/openssh)' $Config.SshKeyFormat
-        } while ($fmtVal -notin @('ppk', 'openssh'))
+            $fmtVal = Read-Value 'SSH key format (ppk/openssh/both)' $Config.SshKeyFormat
+        } while ($fmtVal -notin @('ppk', 'openssh', 'both'))
         $Config.SshKeyFormat = $fmtVal
     }
 
@@ -100,8 +101,8 @@ function Test-Config {
     $errs = @()
     if (-not $Config.TenantFriendlyName) { $errs += 'Tenant friendly name is required.' }
     if (-not $Config.IspssUsername)       { $errs += 'ISPSS username is required.' }
-    if ($Config.EnableMfaCache -and $Config.SshKeyFormat -notin @('ppk', 'openssh')) {
-        $errs += 'SSH key format must be ppk or openssh.'
+    if ($Config.EnableMfaCache -and $Config.SshKeyFormat -notin @('ppk', 'openssh', 'both')) {
+        $errs += 'SSH key format must be ppk, openssh, or both.'
     }
     return $errs
 }
@@ -203,7 +204,12 @@ function Invoke-SIAnablePuTTY {
     Write-Host "  MFA cache      : $($config.EnableMfaCache)"
     if ($config.EnableMfaCache) {
         Write-Host "  Key format     : $($config.SshKeyFormat)"
-        Write-Host "  Key path       : $(Get-SshKeyPath $config.TenantFriendlyName $config.SshKeyFormat)"
+        if ($config.SshKeyFormat -in @('ppk', 'both')) {
+            Write-Host "  PPK key path   : $(Get-SshKeyPath $config.TenantFriendlyName 'ppk')"
+        }
+        if ($config.SshKeyFormat -in @('openssh', 'both')) {
+            Write-Host "  OpenSSH key path: $(Get-SshKeyPath $config.TenantFriendlyName 'openssh')"
+        }
     }
     Write-Host ''
     Write-Host "  $($sessions.Count) SSH session(s) to convert:" -ForegroundColor White
@@ -237,7 +243,7 @@ function Invoke-SIAnablePuTTY {
     Write-Host ''
     Write-Host "$created session(s) created in PuTTY." -ForegroundColor Green
     if ($config.EnableMfaCache) {
-        Write-Host 'Run SIAuth-for-PuTTY.ps1 to retrieve and store the SSH key.' -ForegroundColor DarkGray
+        Write-Host 'Run SIAuth-for-SSH.ps1 to retrieve and store the SSH key.' -ForegroundColor DarkGray
     }
 }
 

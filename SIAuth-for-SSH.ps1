@@ -4,9 +4,9 @@
     Authenticates to CyberArk SIA and retrieves an SSH key, storing it in the user's .ssh folder.
 .DESCRIPTION
     Reads tenant/user settings from sia_config.json, authenticates via CyberArk Identity,
-    then calls the SIA SSH key API to retrieve a key in the configured format (ppk or openssh)
-    and writes it to ~\.ssh\cyberark_sia_<tenant>[.ppk].
-    PuTTY sessions created by SIAnable-for-PuTTY are pre-configured to use this file path.
+    then calls the SIA SSH key API to retrieve a key in the configured format (ppk, openssh,
+    or both) and writes it to ~\.ssh\cyberark_sia_<tenant>[.ppk].
+    PuTTY sessions created by SIAnable-for-PuTTY are pre-configured to use the PPK file path.
 #>
 
 [CmdletBinding()]
@@ -25,7 +25,8 @@ $Script:DebugMode = $DebugMode.IsPresent
 
 function Get-SshKeyPath {
     param([string]$Tenant, [string]$Format)
-    $ext = if ($Format -eq 'ppk') { '.ppk' } else { '' }
+    # When both formats are requested, PuTTY's PublicKeyFile entry uses the .ppk path
+    $ext = if ($Format -in @('ppk', 'both')) { '.ppk' } else { '' }
     Join-Path $env:USERPROFILE ".ssh\cyberark_sia_$Tenant$ext"
 }
 
@@ -293,7 +294,7 @@ function Invoke-SIAuthPuTTY {
         exit 1
     }
 
-    $keyPath = Get-SshKeyPath -Tenant $config.TenantFriendlyName -Format $config.SshKeyFormat
+    $formats = if ($config.SshKeyFormat -eq 'both') { @('ppk', 'openssh') } else { @($config.SshKeyFormat) }
 
     Write-Host ''
     Write-Host '=== CyberArk SIA SSH Key Refresh ===' -ForegroundColor Cyan
@@ -301,10 +302,12 @@ function Invoke-SIAuthPuTTY {
     Write-Host "  Identity tenant : $($config.IdentityTenantId)"
     Write-Host "  User            : $($config.IspssUsername)"
     Write-Host "  Key format      : $($config.SshKeyFormat)"
-    Write-Host "  Key destination : $keyPath"
+    foreach ($fmt in $formats) {
+        Write-Host "  $(($fmt).ToUpper()) key path  : $(Get-SshKeyPath -Tenant $config.TenantFriendlyName -Format $fmt)"
+    }
     Write-Host ''
 
-    # --- Authenticate ---
+    # --- Authenticate once ---
     try {
         $bearerToken = Invoke-CyberArkIdentityAuth -IdentityTenantId $config.IdentityTenantId `
                                                    -Username $config.IspssUsername
@@ -313,28 +316,29 @@ function Invoke-SIAuthPuTTY {
     }
     Write-Host 'Authentication successful.' -ForegroundColor Green
 
-    # --- Retrieve SSH key ---
-    try {
-        $keyContent = Get-SiaSshKey -Tenant $config.TenantFriendlyName `
-                                    -BearerToken $bearerToken `
-                                    -Format $config.SshKeyFormat
-    } catch {
-        Write-Host "SSH key retrieval error: $_" -ForegroundColor Red; exit 1
-    }
-    Write-Host 'SSH key retrieved.' -ForegroundColor Green
+    # --- Retrieve and save each requested format ---
+    foreach ($fmt in $formats) {
+        $keyPath = Get-SshKeyPath -Tenant $config.TenantFriendlyName -Format $fmt
 
-    # --- Save to disk ---
-    try {
-        Save-SshKey -KeyContent $keyContent -KeyPath $keyPath
-    } catch {
-        Write-Host "Error saving SSH key: $_" -ForegroundColor Red; exit 1
+        try {
+            $keyContent = Get-SiaSshKey -Tenant $config.TenantFriendlyName `
+                                        -BearerToken $bearerToken `
+                                        -Format $fmt
+        } catch {
+            Write-Host "SSH key retrieval error ($fmt): $_" -ForegroundColor Red; exit 1
+        }
+
+        try {
+            Save-SshKey -KeyContent $keyContent -KeyPath $keyPath
+        } catch {
+            Write-Host "Error saving $fmt key: $_" -ForegroundColor Red; exit 1
+        }
+
+        Write-Host "$fmt key written to: $keyPath" -ForegroundColor Green
     }
 
-    Write-Host "SSH key written to: $keyPath" -ForegroundColor Green
-    if ($config.SshKeyFormat -eq 'ppk') {
-        Write-Host 'PuTTY _SIA sessions are configured to use this key automatically.' -ForegroundColor DarkGray
-    } else {
-        Write-Host 'OpenSSH key stored. Ensure your SSH client is configured to use it.' -ForegroundColor DarkGray
+    if ($config.SshKeyFormat -in @('ppk', 'both')) {
+        Write-Host 'PuTTY _SIA sessions are configured to use the PPK key automatically.' -ForegroundColor DarkGray
     }
 }
 

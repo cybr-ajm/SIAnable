@@ -23,7 +23,7 @@ PowerShell scripts that make remote connection clients work with [CyberArk Secur
 | Script | Purpose |
 |---|---|
 | `SIAnable-for-PuTTY.ps1` | Converts existing PuTTY SSH sessions (read from the registry) into SIA-enabled duplicates prefixed with `_SIA`, rewriting the hostname and username to route through the CyberArk SIA SSH gateway |
-| `SIAuth-for-PuTTY.ps1` | Authenticates to CyberArk Identity, retrieves an SSH key from the SIA API, and stores it in `~\.ssh\` for use by the converted sessions |
+| `SIAuth-for-SSH.ps1` | Authenticates to CyberArk Identity, retrieves an SSH key from the SIA API, and stores it in `~\.ssh\` for use by the converted sessions |
 
 ## Requirements
 
@@ -156,13 +156,13 @@ All other session settings (port, terminal settings, proxy, etc.) are copied ver
 
 Only sessions using the SSH protocol are converted. Non-SSH sessions (Telnet, Serial, etc.) are skipped.
 
-### SIAuth-for-PuTTY.ps1
+### SIAuth-for-SSH.ps1
 
 Authenticates to CyberArk Identity and retrieves an SSH key from the SIA API, storing it at `~\.ssh\cyberark_sia_<tenant>[.ppk]`. The `_SIA` sessions created by `SIAnable-for-PuTTY` are pre-configured to load the key from this path automatically.
 
 ```powershell
-.\SIAuth-for-PuTTY.ps1
-.\SIAuth-for-PuTTY.ps1 -DebugMode   # print every API request and response
+.\SIAuth-for-SSH.ps1
+.\SIAuth-for-SSH.ps1 -DebugMode   # print every API request and response
 ```
 
 The key format (`ppk` or `openssh`) is set during `SIAnable-for-PuTTY` configuration and saved to `sia_config.json`. Use `ppk` for native PuTTY sessions; use `openssh` for other SSH clients (OpenSSH, WinSCP, etc.) that read from `~\.ssh\`.
