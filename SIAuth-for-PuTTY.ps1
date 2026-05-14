@@ -222,7 +222,10 @@ function Get-SiaSshKey {
     param([string]$Tenant, [string]$BearerToken, [string]$Format)
 
     $uri     = "https://$Tenant.dpa.cyberark.cloud/api/ssh/sso/key?format=$Format"
-    $headers = @{ 'Authorization' = "Bearer $BearerToken" }
+    $headers = @{
+        'Authorization' = "Bearer $BearerToken"
+        'Accept'        = 'application/x-pem-file, application/vnd.putty.ppk, application/json'
+    }
 
     if ($Script:DebugMode) {
         Write-Host "  [DBG] -> GET $uri" -ForegroundColor DarkCyan
