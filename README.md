@@ -1,6 +1,6 @@
 # SIAnable
 
-PowerShell scripts that make remote desktop managers work with [CyberArk Secure Infrastructure Access (SIA)](https://www.cyberark.com/products/secure-infrastructure-access/).
+PowerShell scripts that make remote connection clients work with [CyberArk Secure Infrastructure Access (SIA)](https://www.cyberark.com/products/secure-infrastructure-access/).
 
 ## Scripts
 
@@ -18,6 +18,13 @@ PowerShell scripts that make remote desktop managers work with [CyberArk Secure 
 | `SIAnable-for-RoyalTS.ps1` | Converts an existing `.rtsz` document into a SIA-enabled duplicate, rewriting all RDP connections to route through the CyberArk SIA gateway |
 | `SIAuth-for-RoyalTS.ps1` | Authenticates to CyberArk Identity, retrieves an MFA caching token from the SIA API, and writes it into every `/m` connection in a `.rtsz` document |
 
+### PuTTY
+
+| Script | Purpose |
+|---|---|
+| `SIAnable-for-PuTTY.ps1` | Converts existing PuTTY SSH sessions (read from the registry) into SIA-enabled duplicates prefixed with `_SIA`, rewriting the hostname and username to route through the CyberArk SIA SSH gateway |
+| `SIAuth-for-PuTTY.ps1` | Authenticates to CyberArk Identity, retrieves an SSH key from the SIA API, and stores it in `~\.ssh\` for use by the converted sessions |
+
 ## Requirements
 
 - Windows PowerShell 5.1 or later
@@ -25,10 +32,11 @@ PowerShell scripts that make remote desktop managers work with [CyberArk Secure 
 - A CyberArk Identity account with MFA enrolled
 - **RDCMan scripts:** [Remote Desktop Connection Manager](https://learn.microsoft.com/en-us/sysinternals/downloads/rdcman)
 - **Royal TS scripts:** [Royal TS v7](https://www.royalapps.com/ts/win/download) — the `RoyalDocument.PowerShell` module is installed automatically on first run
+- **PuTTY scripts:** [PuTTY](https://www.putty.org/) installed with at least one saved SSH session
 
 ## Configuration
 
-All four scripts share a single `sia_config.json` file stored alongside them. The file is created and updated automatically when you run any script. Fields:
+All scripts share a single `sia_config.json` file stored alongside them. The file is created and updated automatically when you run any script. Fields:
 
 | Field | Description |
 |---|---|
@@ -41,6 +49,7 @@ All four scripts share a single `sia_config.json` file stored alongside them. Th
 | `TargetRdgPath` | Path where `SIAnable-for-RDCMan` writes its output, and the default file `SIAuth-for-RDCMan` updates |
 | `SourceRtszPath` | Path to the source `.rtsz` document |
 | `TargetRtszPath` | Path where `SIAnable-for-RoyalTS` writes its output, and the default file `SIAuth-for-RoyalTS` updates |
+| `SshKeyFormat` | SSH key format for PuTTY scripts: `ppk` (native PuTTY format) or `openssh` |
 
 ---
 
@@ -118,10 +127,50 @@ Both `SIAuth` scripts share the same authentication logic:
 
 > Tokens are typically valid for one hour. Re-run the relevant `SIAuth` script to refresh before they expire. All `/m` credentials in the selected file are updated regardless of tenant — if your file mixes connections from multiple tenants, run once per tenant against the appropriate file.
 
-## Connection string format
+## RDP connection string format
 
 ```
 secureaccess /i <IspssUsername> /s <TenantFriendlyName> /a <originalHostname> [/m]
 ```
 
 The `/m` flag is included when `EnableMfaCache` is `true`. When present, the connection passes the stored password to `secureaccess` as the MFA cache token rather than prompting for MFA interactively on each connection.
+
+---
+
+## PuTTY scripts
+
+### SIAnable-for-PuTTY.ps1
+
+Reads all SSH sessions from the PuTTY registry (`HKCU:\SOFTWARE\SimonTatham\PuTTY\Sessions`), skips any already prefixed with `_SIA`, and creates a `_SIA<original>` duplicate for each one. Sessions are prefixed with `_SIA` so they sort to the top of the PuTTY session list.
+
+```powershell
+.\SIAnable-for-PuTTY.ps1
+```
+
+Each converted session has:
+- **Host** set to `<tenant>.ssh.cyberark.cloud`
+- **Username** set to `<IspssUsername>#<tenant>@<originalHostname>` — PuTTY appends `@<host>` to produce the full SSH target the SIA gateway expects
+- **Private key file** set to the SSH key path (when MFA caching is enabled)
+
+All other session settings (port, terminal settings, proxy, etc.) are copied verbatim from the source.
+
+Only sessions using the SSH protocol are converted. Non-SSH sessions (Telnet, Serial, etc.) are skipped.
+
+### SIAuth-for-PuTTY.ps1
+
+Authenticates to CyberArk Identity and retrieves an SSH key from the SIA API, storing it at `~\.ssh\cyberark_sia_<tenant>[.ppk]`. The `_SIA` sessions created by `SIAnable-for-PuTTY` are pre-configured to load the key from this path automatically.
+
+```powershell
+.\SIAuth-for-PuTTY.ps1
+.\SIAuth-for-PuTTY.ps1 -DebugMode   # print every API request and response
+```
+
+The key format (`ppk` or `openssh`) is set during `SIAnable-for-PuTTY` configuration and saved to `sia_config.json`. Use `ppk` for native PuTTY sessions; use `openssh` for other SSH clients (OpenSSH, WinSCP, etc.) that read from `~\.ssh\`.
+
+### SSH connection string format
+
+```
+<IspssUsername>#<TenantFriendlyName>@<originalHostname>@<TenantFriendlyName>.ssh.cyberark.cloud
+```
+
+The portion before the final `@` is the SSH username; the portion after is the gateway hostname.
