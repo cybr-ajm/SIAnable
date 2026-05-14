@@ -168,17 +168,37 @@ function Get-MobaSshSessions {
 }
 
 # ---------------------------------------------------------------------------
-# Rewrite hostname (field 1) and username (field 3) for the SIA gateway
+# Rewrite hostname (field 1), username (field 3), and optionally the private
+# key path (field 14) for the SIA gateway.
+#
+# MobaXterm saves sessions in two formats:
+#   Simple  (~15 fields) — default settings only; field 14 is trailing whitespace
+#   Full   (30+ fields)  — all settings explicit; field 14 is the private key path
+#
+# Field 14 is only updated when the session is already in full format (>15 fields),
+# since inserting a key path into a simple-format session corrupts the structure.
+# MobaXterm uses _ProfileDir_ as a placeholder for the Windows user profile root.
 # ---------------------------------------------------------------------------
 
 function Convert-ToSiaSessionData {
-    param([string]$Data, [string]$Tenant, [string]$IspssUser, [string]$OrigHost)
+    param(
+        [string]$Data,
+        [string]$Tenant,
+        [string]$IspssUser,
+        [string]$OrigHost,
+        [bool]$SetKeyFile
+    )
 
     $parts    = $Data -split '%'
-    # SSH username format: <IspssUser>#<tenant>@<originalHost>
-    # MobaXterm appends @<host> to form the full SSH target, matching the SIA gateway expectation
     $parts[1] = "$Tenant.ssh.cyberark.cloud"
     $parts[3] = "$IspssUser#$Tenant@$OrigHost"
+
+    if ($SetKeyFile -and $parts.Length -gt 15) {
+        # Full-format session — field 14 is the private key path.
+        # Use _ProfileDir_ (MobaXterm's placeholder for USERPROFILE) and
+        # no file extension since MobaXterm expects OpenSSH format.
+        $parts[14] = "_ProfileDir_\.ssh\cyberark_sia_$Tenant"
+    }
 
     return ($parts -join '%')
 }
@@ -255,13 +275,17 @@ function Invoke-SIAnableMobaXterm {
     $siaLines.Add("SubRep=$SiaSubRep")
     $siaLines.Add('ImgNum=42')
 
+    $simpleFormatCount = 0
     foreach ($session in $sshSessions) {
-        $siaName = "_SIA$($session.Name)"
+        $siaName    = "_SIA$($session.Name)"
+        $isFullFmt  = ($session.Data -split '%').Length -gt 15
+        if ($config.EnableMfaCache -and -not $isFullFmt) { $simpleFormatCount++ }
         $siaData = Convert-ToSiaSessionData `
-            -Data      $session.Data `
-            -Tenant    $config.TenantFriendlyName `
-            -IspssUser $config.IspssUsername `
-            -OrigHost  $session.OrigHost
+            -Data       $session.Data `
+            -Tenant     $config.TenantFriendlyName `
+            -IspssUser  $config.IspssUsername `
+            -OrigHost   $session.OrigHost `
+            -SetKeyFile ($config.EnableMfaCache -and $isFullFmt)
         $siaLines.Add("$siaName=$siaData")
     }
 
@@ -279,6 +303,12 @@ function Invoke-SIAnableMobaXterm {
     Write-Host "Original backed up to: $MobaIniPath.bak" -ForegroundColor DarkGray
     if ($config.EnableMfaCache) {
         Write-Host 'Run SIAuth-for-SSH.ps1 to retrieve and store the SSH key.' -ForegroundColor DarkGray
+        if ($simpleFormatCount -gt 0) {
+            Write-Host ''
+            Write-Host "Note: $simpleFormatCount session(s) use MobaXterm's compact format and could not have" -ForegroundColor Yellow
+            Write-Host '      the key path configured automatically. Open each _SIA session in MobaXterm,' -ForegroundColor Yellow
+            Write-Host '      set the private key file manually, and save — then re-run this script.' -ForegroundColor Yellow
+        }
     }
 }
 
