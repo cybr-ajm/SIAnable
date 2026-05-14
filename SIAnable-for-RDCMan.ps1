@@ -232,6 +232,7 @@ function New-SiaServer {
     # -- <gatewaySettings> — explicitly set per server, not inherited ----------
     $gw = $Doc.CreateElement('gatewaySettings')
     $gw.SetAttribute('inherit', 'None')
+    $el = $Doc.CreateElement('enabled');     $el.InnerText = 'True';                                 $gw.AppendChild($el) | Out-Null
     $el = $Doc.CreateElement('hostname');    $el.InnerText = $siaHostname;                           $gw.AppendChild($el) | Out-Null
     $el = $Doc.CreateElement('logonMethod'); $el.InnerText = '0';                                    $gw.AppendChild($el) | Out-Null
     $el = $Doc.CreateElement('username');    $el.InnerText = 'secureaccess@cyberark';                $gw.AppendChild($el) | Out-Null
@@ -349,6 +350,7 @@ function New-SiaRdgFile {
     # File-level gateway settings — all groups and servers inherit this
     $fileGw = $doc.CreateElement('gatewaySettings')
     $fileGw.SetAttribute('inherit', 'None')
+    $el = $doc.CreateElement('enabled');     $el.InnerText = 'True';                              $fileGw.AppendChild($el) | Out-Null
     $el = $doc.CreateElement('hostname');    $el.InnerText = "$Tenant.rdp.cyberark.cloud";        $fileGw.AppendChild($el) | Out-Null
     $el = $doc.CreateElement('logonMethod'); $el.InnerText = '0';                                 $fileGw.AppendChild($el) | Out-Null
     $el = $doc.CreateElement('username');    $el.InnerText = 'secureaccess@cyberark';             $fileGw.AppendChild($el) | Out-Null
