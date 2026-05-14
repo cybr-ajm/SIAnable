@@ -247,15 +247,23 @@ function Get-SiaSshKey {
         throw "SSH key request failed: $_"
     }
 
-    if ($Script:DebugMode) {
-        Write-Host "         Status : $($resp.StatusCode) $($resp.StatusDescription)" -ForegroundColor DarkYellow
-        Write-Host "         Content-Type : $($resp.Headers['Content-Type'])" -ForegroundColor DarkYellow
-        Write-Host "         Body ($($resp.Content.Length) byte(s)):" -ForegroundColor DarkYellow
-        Write-Host $resp.Content -ForegroundColor DarkYellow
+    # Invoke-WebRequest returns a byte[] for non-text Content-Types like application/vnd.putty.ppk.
+    # Decode to string regardless so the caller always receives usable text.
+    $keyText = if ($resp.Content -is [byte[]]) {
+        [System.Text.Encoding]::UTF8.GetString($resp.Content)
+    } else {
+        $resp.Content
     }
 
-    if (-not $resp.Content) { throw 'SIA returned an empty SSH key response.' }
-    return $resp.Content
+    if ($Script:DebugMode) {
+        Write-Host "         Status       : $($resp.StatusCode) $($resp.StatusDescription)" -ForegroundColor DarkYellow
+        Write-Host "         Content-Type : $($resp.Headers['Content-Type'])" -ForegroundColor DarkYellow
+        Write-Host "         Body:" -ForegroundColor DarkYellow
+        Write-Host $keyText -ForegroundColor DarkYellow
+    }
+
+    if (-not $keyText) { throw 'SIA returned an empty SSH key response.' }
+    return $keyText
 }
 
 # ---------------------------------------------------------------------------
