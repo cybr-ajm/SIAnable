@@ -18,6 +18,12 @@ PowerShell scripts that make remote connection clients work with [CyberArk Secur
 | `SIAnable-for-RoyalTS.ps1` | Converts an existing `.rtsz` document into a SIA-enabled duplicate, rewriting all RDP connections to route through the CyberArk SIA gateway |
 | `SIAuth-for-RoyalTS.ps1` | Authenticates to CyberArk Identity, retrieves an MFA caching token from the SIA API, and writes it into every `/m` connection in a `.rtsz` document |
 
+### MobaXterm
+
+| Script | Purpose |
+|---|---|
+| `SIAnable-for-MobaXterm.ps1` | Converts existing MobaXterm SSH sessions into SIA-enabled duplicates prefixed with `_SIA`, written into a dedicated `CyberArk SIA Connections` bookmark folder in `MobaXterm.ini` |
+
 ### PuTTY
 
 | Script | Purpose |
@@ -32,6 +38,7 @@ PowerShell scripts that make remote connection clients work with [CyberArk Secur
 - A CyberArk Identity account with MFA enrolled
 - **RDCMan scripts:** [Remote Desktop Connection Manager](https://learn.microsoft.com/en-us/sysinternals/downloads/rdcman)
 - **Royal TS scripts:** [Royal TS v7](https://www.royalapps.com/ts/win/download) — the `RoyalDocument.PowerShell` module is installed automatically on first run
+- **MobaXterm scripts:** [MobaXterm](https://mobaxterm.mobatek.net/) with at least one saved SSH session
 - **PuTTY scripts:** [PuTTY](https://www.putty.org/) installed with at least one saved SSH session
 
 ## Configuration
